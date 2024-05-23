@@ -5,6 +5,9 @@ import torchvision
 import torchvision.transforms.functional as F
 from torchvision.transforms import InterpolationMode, Resize 
 import xformers
+
+from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
+
 TOKENSCON = 77
 TOKENS = 75
 
@@ -18,7 +21,11 @@ def _memory_efficient_attention_xformers(module, query, key, value):
     hidden_states = module.batch_to_head_dim(hidden_states)
     return hidden_states
 
-def main_forward_diffusers(module,hidden_states,encoder_hidden_states,divide,userpp = False,tokens=[],width = 64,height = 64,step = 0, isxl = False, inhr = None):
+
+
+# def attention_process_from_diffusers(module):
+    
+def main_forward_diffusers(module,hidden_states,encoder_hidden_states):
     context = encoder_hidden_states
     query = module.to_q(hidden_states)
     # cond, uncond =query.chunk(2)
@@ -36,6 +43,11 @@ def main_forward_diffusers(module,hidden_states,encoder_hidden_states,divide,use
     hidden_states = module.to_out[1](hidden_states)
     return hidden_states
     
+def main_forward_diffusers_original(attn, hidden_states, encoder_hidden_states, attention_mask=None, temb=None, *args, **kwargs):
+    # hidden_states = AttnProcessor()(attn, hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states)
+    hidden_states = AttnProcessor2_0()(attn, hidden_states=hidden_states, encoder_hidden_states=encoder_hidden_states)
+    
+    return hidden_states
     
     
     
@@ -44,7 +56,8 @@ def hook_forwards(self, root_module: torch.nn.Module):
     for name, module in root_module.named_modules():
         if "attn2" in name and module.__class__.__name__ == "Attention":
             # print(f"Attaching hook to {name}")
-            module.forward = hook_forward(self, module)           
+            module.forward = hook_forward(self, module)
+         
 
 
 def hook_forward(self, module):
@@ -69,7 +82,6 @@ def hook_forward(self, module):
         contexts = context.clone()
 
         def matsepcalc(x,contexts,pn=None,divide=None):
-            h_states = []
             x_t = x.size()[1]
             (latent_h,latent_w) = split_dims(x_t, height, width, self)
             
@@ -80,6 +92,8 @@ def hook_forward(self, module):
             # tll = self.pt
             outputs_x = []
             for index in range(self.batch_size):
+                h_states = []
+
                 tll = self.pts[index]
                 i = 0
                 outb = None
@@ -159,21 +173,18 @@ def hook_forward(self, module):
             opx = matsepcalc(px, conp)
             onx = matsepcalc(nx, conn)
             if self.isvanilla: # SBM Ddim reverses cond/uncond.
-                output_x = torch.cat([onx, opx], dim=1)
+                # output_x = torch.cat([onx, opx], dim=1)
+                temps = []
+                for opx_i, onx_i in zip(opx, onx):
+                    temp = torch.cat([opx_i, onx_i])
+                    temps.append(temp)
+                output_x = torch.cat(temps)
             else:
                 output_x = torch.cat([opx, onx], dim=1) 
    
         self.pn = not self.pn
         self.count = 0
-        # self.count += 1
-
-        # limit = 70 if self.isxl else 16
-
-        # if self.count == limit:
-        #     self.pn = not self.pn
-        #     self.count = 0
-        #     self.pfirst = False
-        #     self.condi += 1
+ 
         return output_x
 
     return forward

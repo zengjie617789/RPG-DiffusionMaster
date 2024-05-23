@@ -1094,7 +1094,7 @@ class RegionalDiffusionXLPipeline(
             self.ppts.append(ppt)      
        
 
-        self.original_prompt = prompts
+        self.original_prompt = self.prompts
         self.prompts_2 = self.original_prompt if prompts_2 is None else prompts_2
 
         
