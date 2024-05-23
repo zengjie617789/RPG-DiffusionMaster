@@ -138,28 +138,32 @@ def round_dim(x,y):
     """
     return x // y + (x % y >= y // 2)       
 
-def keyconverter(self,split_ratio,usebase):
-    '''convert BREAKS to ADDCOMM/ADDBASE/ADDCOL/ADDROW'''
-    if SPLROW not in split_ratio: # Commas only - interpret as 1d.
-        split_ratio2 = split_l2(split_ratio, SPLROW, SPLCOL, map_function = ffloatd(1))
-        split_ratio2r = [1]
-    else:
-        (split_ratio2r,split_ratio2) = split_l2(split_ratio, SPLROW, SPLCOL, 
-                                        indsingles = True, map_function = ffloatd(1))
-    (split_ratio2,split_ratio2r) = ratiosdealer(split_ratio2,split_ratio2r)
-    #print(keychanger,p.prompt)
-    txtkey = fspace(DKEYINOUT[("in", False)]) + NLN  
-    lkeys = [txtkey.join([""] * len(cell)) for cell in split_ratio2]
-    txtkey = fspace(DKEYINOUT[("out", False)]) + NLN
-    template = txtkey.join(lkeys) 
-    if usebase:
-        template = fspace(KEYBASE) + NLN + template
-    changer = template.split(NLN)
-    changer = [l.strip() for l in changer]
-    keychanger=changer[:-1]
-    for change in keychanger:
-        if change == KEYBASE and KEYBASE in self.prompt: continue
-        self.prompt= self.prompt.replace(KEYBRK,change,1)                        
+def keyconverter(self,split_ratios,prompts, usebase):
+    prompts_convert = []
+    for split_ratio, prompt in zip(split_ratios, prompts):
+        '''convert BREAKS to ADDCOMM/ADDBASE/ADDCOL/ADDROW'''
+        if SPLROW not in split_ratio: # Commas only - interpret as 1d.
+            split_ratio2 = split_l2(split_ratio, SPLROW, SPLCOL, map_function = ffloatd(1))
+            split_ratio2r = [1]
+        else:
+            (split_ratio2r,split_ratio2) = split_l2(split_ratio, SPLROW, SPLCOL, 
+                                            indsingles = True, map_function = ffloatd(1))
+        (split_ratio2,split_ratio2r) = ratiosdealer(split_ratio2,split_ratio2r)
+        #print(keychanger,p.prompt)
+        txtkey = fspace(DKEYINOUT[("in", False)]) + NLN  #  ' ADDCOL \n'
+        lkeys = [txtkey.join([""] * len(cell)) for cell in split_ratio2] #[' ADDCOL \n', ' ADDCOL \n']
+        txtkey = fspace(DKEYINOUT[("out", False)]) + NLN
+        template = txtkey.join(lkeys) 
+        if usebase:
+            template = fspace(KEYBASE) + NLN + template
+        changer = template.split(NLN)
+        changer = [l.strip() for l in changer]
+        keychanger=changer[:-1]
+        for change in keychanger:
+            if change == KEYBASE and KEYBASE in prompt: continue
+            prompt = prompt.replace(KEYBRK,change,1)
+        prompts_convert.append(prompt)
+    self.prompts = prompts_convert                        
 
 def split_l2(s, key_row, key_col, indsingles = False, map_function = fidentity, split_struct = None):
     lret = []
@@ -215,58 +219,50 @@ def split_l2(s, key_row, key_col, indsingles = False, map_function = fidentity, 
             lret = (lsingles,lcells)
     return lret
     
-def matrixdealer(self, split_ratio, baseratio):
+def matrixdealer(self, split_ratios, baseratios):
     # print(split_ratio, baseratio)
-    prompt = self.prompt
-    if KEYBASE in prompt: prompt = prompt.split(KEYBASE,1)[1]
-    if (KEYCOL in prompt.upper() or KEYROW in prompt.upper()):
-        breaks = prompt.count(KEYROW) + prompt.count(KEYCOL) + int(self.usebase)
-        # Prompt anchors, count breaks between special keywords.
-        # print('prompt:', prompt)
-        lbreaks = split_l2(prompt, KEYROW, KEYCOL, map_function = fcountbrk)
-        # print('lbreaks', lbreaks)
-        if (SPLROW not in split_ratio and (KEYROW in prompt.upper()) != (KEYCOL in prompt.upper())):
-            # By popular demand, 1d integrated into 2d.
-            # This works by either adding a single row value (inner),
-            # or setting flip to the reverse (outer).
-            # Only applies when using just ADDROW / ADDCOL keys, and commas in ratio.
-            split_ratio = "1" + SPLCOL + split_ratio
-            (split_ratio2r,split_ratio2) = split_l2(split_ratio, SPLROW, SPLCOL, indsingles = True,
-                                map_function = ffloatd(1), split_struct = lbreaks)
-        else: # Standard ratios, split to rows and cols.
-            (split_ratio2r,split_ratio2) = split_l2(split_ratio, SPLROW, SPLCOL, indsingles = True,
-                                            map_function = ffloatd(1), split_struct = lbreaks)
-            print('split_ratio2r', split_ratio2r)
-            print('split_ratio2', split_ratio2)
-        # More like "bweights", applied per cell only.
-        baseratio2 = split_l2(baseratio, SPLROW, SPLCOL, map_function = ffloatd(0), split_struct = lbreaks)
-        print(baseratio2)
-    (split_ratio,split_ratior) = ratiosdealer(split_ratio2,split_ratio2r)
-    baseratio = baseratio2 
-    
-    # Merge various L2s to cells and rows.
-    drows = []
-    for r,_ in enumerate(lbreaks):
-        dcells = []
-        for c,_ in enumerate(lbreaks[r]):
-            d = Region(split_ratio[r][c][0], split_ratio[r][c][1], baseratio[r][c], lbreaks[r][c])
-            dcells.append(d)
-        drow = Row(split_ratior[r][0], split_ratior[r][1], dcells)
-        drows.append(drow)
+    prompts = self.prompts
+    split_ratios_tmp = []
+    baseratios_tmp = []
+    for prompt, split_ratio, baseratio in zip(prompts, split_ratios, baseratios):
+        if KEYBASE in prompt: prompt = prompt.split(KEYBASE,1)[1]
+        if (KEYCOL in prompt.upper() or KEYROW in prompt.upper()):
+            breaks = prompt.count(KEYROW) + prompt.count(KEYCOL) + int(self.usebase)
+            lbreaks = split_l2(prompt, KEYROW, KEYCOL, map_function = fcountbrk)
+            if (SPLROW not in split_ratio and (KEYROW in prompt.upper()) != (KEYCOL in prompt.upper())):
+                # By popular demand, 1d integrated into 2d.
+                # This works by either adding a single row value (inner),
+                # or setting flip to the reverse (outer).
+                # Only applies when using just ADDROW / ADDCOL keys, and commas in ratio.
+                split_ratio = "1" + SPLCOL + split_ratio
+                (split_ratio2r,split_ratio2) = split_l2(split_ratio, SPLROW, SPLCOL, indsingles = True,
+                                    map_function = ffloatd(1), split_struct = lbreaks)
+            else: # Standard ratios, split to rows and cols.
+                (split_ratio2r,split_ratio2) = split_l2(split_ratio, SPLROW, SPLCOL, indsingles = True,
+                                                map_function = ffloatd(1), split_struct = lbreaks)
+                print('split_ratio2r', split_ratio2r)
+                print('split_ratio2', split_ratio2)
+            # More like "bweights", applied per cell only.
+            baseratio2 = split_l2(baseratio, SPLROW, SPLCOL, map_function = ffloatd(0), split_struct = lbreaks)
+            print(baseratio2)
+        (split_ratio,split_ratior) = ratiosdealer(split_ratio2,split_ratio2r)
+        baseratio = baseratio2 
+        
+        # Merge various L2s to cells and rows.
+        drows = []
+        for r,_ in enumerate(lbreaks):
+            dcells = []
+            for c,_ in enumerate(lbreaks[r]):
+                d = Region(split_ratio[r][c][0], split_ratio[r][c][1], baseratio[r][c], lbreaks[r][c])
+                dcells.append(d)
+            drow = Row(split_ratior[r][0], split_ratior[r][1], dcells)
+            drows.append(drow)
 
-    self.split_ratio = drows
-    self.baseratio = baseratio
+        split_ratios_tmp.append(drows)
+        baseratios_tmp.append(baseratio)
+    self.split_ratios = split_ratios_tmp
+    self.baseratios = baseratios_tmp
+        
 
-# class test:
-#     def __init__(self, prompt,split_ratio=None,baseratio=0.2,usebase=False):
-#         self.prompt = prompt
-#         self.split_ratio = split_ratio
-#         self.baseratio = 0.2
-#         self.usebase = usebase
-# test_prompt='a girl BREAK a cute boy BREAK a dog BREAK a tree.'
-# split_ratio='1,1,1;1,1,1'
-# x=test(test_prompt,split_ratio)
-# keyconverter(x,split_ratio,usebase=False)
-# print(x.prompt)
-# matrixdealer(x, split_ratio, 0.2)
+
 

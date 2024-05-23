@@ -68,7 +68,7 @@ def hook_forward(self, module):
 
         contexts = context.clone()
 
-        def matsepcalc(x,contexts,pn,divide):
+        def matsepcalc(x,contexts,pn=None,divide=None):
             h_states = []
             x_t = x.size()[1]
             (latent_h,latent_w) = split_dims(x_t, height, width, self)
@@ -77,70 +77,76 @@ def hook_forward(self, module):
             latent_out = latent_w
             latent_in = latent_h
 
-            tll = self.pt
-            
-            i = 0
-            outb = None
-            if self.usebase:
-                context = contexts[:,tll[i][0] * TOKENSCON:tll[i][1] * TOKENSCON,:]
-                cnet_ext = contexts.shape[1] - (contexts.shape[1] // TOKENSCON) * TOKENSCON
-                if cnet_ext > 0:
-                    context = torch.cat([context,contexts[:,-cnet_ext:,:]],dim = 1)
-                    
-                i = i + 1
-
-                out = main_forward_diffusers(module, x, context, divide,userpp =True,isxl = self.isxl)
-
-                # if self.usebase:
-                outb = out.clone()
-                outb = outb.reshape(outb.size()[0], latent_h, latent_w, outb.size()[2]) 
-
-            sumout = 0
-
-            for drow in self.split_ratio:
-                v_states = []
-                sumin = 0
-                for dcell in drow.cols:
-                    # Grabs a set of tokens depending on number of unrelated breaks.
-                    context = contexts[:,tll[i][0] * TOKENSCON:tll[i][1] * TOKENSCON,:]
-                    # Controlnet sends extra conds at the end of context, apply it to all regions.
+            # tll = self.pt
+            outputs_x = []
+            for index in range(self.batch_size):
+                tll = self.pts[index]
+                i = 0
+                outb = None
+                if self.usebase:
+                    context = contexts[index, tll[i][0] * TOKENSCON:tll[i][1] * TOKENSCON,:]
                     cnet_ext = contexts.shape[1] - (contexts.shape[1] // TOKENSCON) * TOKENSCON
                     if cnet_ext > 0:
-                        context = torch.cat([context,contexts[:,-cnet_ext:,:]],dim = 1)
+                        context = torch.cat([context,contexts[index,-cnet_ext:,:]],dim = 1)
+                        
+                    i = i + 1
 
-                    i = i + 1 + dcell.breaks
-                    # if i >= contexts.size()[1]: 
-                    #     indlast = True
+                    # out = main_forward_diffusers(module, x, context)
+                    out = main_forward_diffusers_original(module, x[index].unsqueeze(dim=0), context.unsqueeze(dim=0))
 
-                    out = main_forward_diffusers(module, x, context, divide,userpp = self.pn, isxl = self.isxl)
-                    
-                    out = out.reshape(out.size()[0], latent_h, latent_w, out.size()[2]) # convert to main shape.
-                    # if indlast:
-                    addout = 0
-                    addin = 0
-                    sumin = sumin + int(latent_in*dcell.end) - int(latent_in*dcell.start)
-                    if dcell.end >= 0.999:
-                        addin = sumin - latent_in
-                        sumout = sumout + int(latent_out*drow.end) - int(latent_out*drow.start)
-                        if drow.end >= 0.999:
-                            addout = sumout - latent_out
-                    out = out[:,int(latent_h*drow.start) + addout:int(latent_h*drow.end),
-                                int(latent_w*dcell.start) + addin:int(latent_w*dcell.end),:]
-                    if self.usebase : 
-                        # outb_t = outb[:,:,int(latent_w*drow.start):int(latent_w*drow.end),:].clone()
-                        outb_t = outb[:,int(latent_h*drow.start) + addout:int(latent_h*drow.end),
-                                        int(latent_w*dcell.start) + addin:int(latent_w*dcell.end),:].clone()
-                        out = out * (1 - dcell.base) + outb_t * dcell.base
+                    # if self.usebase:
+                    outb = out.clone()
+                    outb = outb.reshape(outb.size()[0], latent_h, latent_w, outb.size()[2]) 
+
+                sumout = 0
+
+                for drow in self.split_ratios[index]:
+                    v_states = []
+                    sumin = 0
+                    for dcell in drow.cols:
+                        # Grabs a set of tokens depending on number of unrelated breaks.
+                        context = contexts[index,tll[i][0] * TOKENSCON:tll[i][1] * TOKENSCON,:]
+                        # Controlnet sends extra conds at the end of context, apply it to all regions.
+                        cnet_ext = contexts.shape[1] - (contexts.shape[1] // TOKENSCON) * TOKENSCON
+                        if cnet_ext > 0:
+                            context = torch.cat([context,contexts[index,-cnet_ext:,:]],dim = 1)
+
+                        i = i + 1 + dcell.breaks
+                        # if i >= contexts.size()[1]: 
+                        #     indlast = True
+
+                        # out = main_forward_diffusers(module, x, context)
+                        out = main_forward_diffusers_original(module, x[index].unsqueeze(dim=0), context.unsqueeze(dim=0))
+                        
+                        out = out.reshape(out.size()[0], latent_h, latent_w, out.size()[2]) # convert to main shape.
+                        # if indlast:
+                        addout = 0
+                        addin = 0
+                        sumin = sumin + int(latent_in*dcell.end) - int(latent_in*dcell.start)
+                        if dcell.end >= 0.999:
+                            addin = sumin - latent_in
+                            sumout = sumout + int(latent_out*drow.end) - int(latent_out*drow.start)
+                            if drow.end >= 0.999:
+                                addout = sumout - latent_out
+                        out = out[:,int(latent_h*drow.start) + addout:int(latent_h*drow.end),
+                                    int(latent_w*dcell.start) + addin:int(latent_w*dcell.end),:]
+                        if self.usebase : 
+                            # outb_t = outb[:,:,int(latent_w*drow.start):int(latent_w*drow.end),:].clone()
+                            outb_t = outb[:,int(latent_h*drow.start) + addout:int(latent_h*drow.end),
+                                            int(latent_w*dcell.start) + addin:int(latent_w*dcell.end),:].clone()
+                            out = out * (1 - dcell.base) + outb_t * dcell.base
+                
+                        v_states.append(out)
+
+                                
+                    output_x = torch.cat(v_states,dim = 2) # First concat the cells to rows.
+
+                    h_states.append(output_x)
+                output_x = torch.cat(h_states,dim = 1) # Second, concat rows to layer.
+                output_x = output_x.reshape(-1,x.size()[1],x.size()[2]) # Restore to 3d source.  
+                outputs_x.append(output_x)
+            return outputs_x
             
-                    v_states.append(out)
-
-                            
-                output_x = torch.cat(v_states,dim = 2) # First concat the cells to rows.
-
-                h_states.append(output_x)
-            output_x = torch.cat(h_states,dim = 1) # Second, concat rows to layer.
-            output_x = output_x.reshape(x.size()[0],x.size()[1],x.size()[2]) # Restore to 3d source.  
-            return output_x
         if x.size()[0] == 1 * self.batch_size:
             output_x = matsepcalc(x, contexts, self.pn, 1)
         else:
@@ -150,17 +156,13 @@ def hook_forward(self, module):
             else:
                 px, nx = x.chunk(2)
                 conp,conn = contexts.chunk(2)
-            opx = matsepcalc(px, conp, True, 2)
-            onx = matsepcalc(nx, conn, False, 2)
+            opx = matsepcalc(px, conp)
+            onx = matsepcalc(nx, conn)
             if self.isvanilla: # SBM Ddim reverses cond/uncond.
-                output_x = torch.cat([onx, opx])
+                output_x = torch.cat([onx, opx], dim=1)
             else:
-                output_x = torch.cat([opx, onx]) 
-            
-            # px = x
-            # conp = contexts
-            # opx = matsepcalc(px, conp, True, 2)
-            # output_x = opx 
+                output_x = torch.cat([opx, onx], dim=1) 
+   
         self.pn = not self.pn
         self.count = 0
         # self.count += 1
