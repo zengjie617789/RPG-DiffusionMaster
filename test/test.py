@@ -3,7 +3,7 @@ from RegionalDiffusion_xl import RegionalDiffusionXLPipeline
 from diffusers.schedulers import KarrasDiffusionSchedulers,DPMSolverMultistepScheduler
 from mllm import local_llm,GPT4
 import torch
-# from utils.common import save_path, GPUMemory
+from utils.common import save_path
 from pathlib import  Path
 # If you want to load ckpt, initialize with ".from_single_file".
 
@@ -54,8 +54,7 @@ prompt = "monochrome, comics"
 # """
 
 
-regional_prompt = """
- A massive, detailed China dragon, its scales shimmering and claws extended, winding through the air with a sense of power and grace. BREAK
+regional_prompt = """ A massive, detailed China dragon, its scales shimmering and claws extended, winding through the air with a sense of power and grace. BREAK
  a white sky BREAK 
  a white sky BREAK
  Some disciplined  soldiers, each holding a keyboard, marching in perfect unison, their faces determined and focused.
@@ -70,14 +69,14 @@ pipe.load_lora_weights(Path(lora_path).parent, weight_name=Path(lora_path).name)
 pipe.fuse_lora()
 
 num = 4
-num =1; batch_size = 2
+num =1; batch_size = 1
 for i in range(num):
     images = pipe(
-    prompts=regional_prompt,
-    split_ratios=split_ratio, # The ratio of the regional prompt, the number of prompts is the same as the number of regions
+    prompt=regional_prompt,
+    split_ratio=split_ratio, # The ratio of the regional prompt, the number of prompts is the same as the number of regions
     batch_size = batch_size, #batch size
     base_ratios = 0.5, # The ratio of the base prompt    
-    base_prompts= prompt,       
+    base_prompt= prompt,       
     num_inference_steps=20, # sampling step
     height = 1024, 
     negative_prompt=negative_prompt, # negative prompt
@@ -85,7 +84,7 @@ for i in range(num):
     seed = 1234567,# random seed
     guidance_scale = 7.0
     ).images
-    # save_path(images)
+    save_path(images)
 # images.save("test.png")
 
 # MEMORY_CAL.after_memory()

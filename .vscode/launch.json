@@ -10,7 +10,7 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
             "module": "${fileDirnameBasename}.${fileBasenameNoExtension}",
             "env": {"CUDA_VISIBLE_DEVICES": "2"}
         },
