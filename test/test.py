@@ -70,7 +70,7 @@ pipe.load_lora_weights(Path(lora_path).parent, weight_name=Path(lora_path).name)
 pipe.fuse_lora()
 
 num = 4
-num =1; batch_size = 1
+num =1; batch_size = 4
 for i in range(num):
     images = pipe(
     prompts=regional_prompt,
@@ -86,6 +86,7 @@ for i in range(num):
     guidance_scale = 7.0
     ).images
     save_path(images)
+    
 # images.save("test.png")
 
 # MEMORY_CAL.after_memory()

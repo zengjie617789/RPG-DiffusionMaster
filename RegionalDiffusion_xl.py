@@ -403,28 +403,19 @@ class RegionalDiffusionXLPipeline(
                 if isinstance(self, TextualInversionLoaderMixin):
                     prompt = self.maybe_convert_prompt(prompt, tokenizer)
                 
-            # split prompt into regional prompts
-            # for prompt_i, prompt_2_i in zip(prompts, prompts_2):
-                # if isinstance(self, TextualInversionLoaderMixin):
-                    # prompt_i = self.maybe_convert_prompt(prompt_i, tokenizer[0])
-                    # prompt_2_i = self.maybe_convert_prompt(prompt_2_i, tokenizer[0])
                 tmp_prompt_embeds = []
                 tmp_pool_embeds = []
                 for prompt_i in prompt:
                     regional_prompt_embeds, pooled_prompt_embeds = get_prompt_embeds(tokenizer, text_encoder, prompt_i)
                     regional_prompt_embeds = torch.cat(regional_prompt_embeds, dim=1)
-                    # regional_prompt2_embeds, _ = get_prompt_embeds(tokenizers[1], text_encoders[1], prompt_2_i)
-                    # regional_prompt2_embeds = torch.cat(regional_prompt2_embeds, dim=1)
                     region_num = regional_prompt_embeds.shape[1] // TOKENSCON
-                    print(f"region_num: {region_num}")
-                    # prompt_embeds = torch.cat([regional_prompt_embeds, regional_prompt2_embeds], dim=-1)
-                    #print('regional_concatenated_prompt_embeds:',prompt_embeds.shape)
+                    # print(f"region_num: {region_num}")
                     tmp_prompt_embeds.append(regional_prompt_embeds)
                     tmp_pool_embeds.append(pooled_prompt_embeds)
                 
                 prompt_embeds_list.append(torch.cat(tmp_prompt_embeds, dim=0))
                 pooled_prompt_embeds = torch.cat(tmp_pool_embeds, dim=0)
-            prompt_embeds = torch.concat(prompt_embeds_list, dim=-1)
+            prompt_embeds = torch.cat(prompt_embeds_list, dim=-1)
                 
         
         
