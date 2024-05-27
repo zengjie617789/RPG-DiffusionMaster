@@ -173,12 +173,9 @@ def hook_forward(self, module):
             opx = matsepcalc(px, conp)
             onx = matsepcalc(nx, conn)
             if self.isvanilla: # SBM Ddim reverses cond/uncond.
-                # output_x = torch.cat([onx, opx], dim=1)
-                temps = []
-                for opx_i, onx_i in zip(opx, onx):
-                    temp = torch.cat([opx_i, onx_i])
-                    temps.append(temp)
-                output_x = torch.cat(temps)
+                opx_t = torch.cat(opx)
+                onx_t = torch.cat(onx)
+                output_x = torch.cat([onx_t, opx_t])
             else:
                 output_x = torch.cat([opx, onx], dim=1) 
    
